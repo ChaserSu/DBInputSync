@@ -12,7 +12,7 @@ app = Flask(__name__)
 REPLACE_RULES = []
 
 # ===== 重构历史记录：存储上一次操作的类型和内容 =====
-# 格式: {"type": "text"/"enter", "content": 文本内容/空字符串}
+# 格式: {"type": "text"/"enter"/"delete", "content": 文本内容/空字符串}
 LAST_OPERATION = {"type": None, "content": ""}
 
 def load_replace_rules():
@@ -69,6 +69,7 @@ def undo_last_operation():
     根据 LAST_OPERATION 的类型执行撤销
     - text: 删除对应长度的字符
     - enter: 模拟删除换行（按一次 backspace，多数编辑器换行占1个删除单位）
+    - delete: 无撤销（因为是主动删除PC端内容，无历史文本可恢复）
     """
     op_type = LAST_OPERATION["type"]
     content = LAST_OPERATION["content"]
@@ -81,6 +82,9 @@ def undo_last_operation():
     elif op_type == "enter":
         # 回车操作：按一次 backspace 撤销换行
         pyautogui.press('backspace')
+    elif op_type == "delete":
+        # 删除操作：无撤销逻辑，直接清空历史
+        pass
 
 # ===== 新增：方向键控制接口 =====
 @app.route('/move_cursor', methods=['POST'])
@@ -92,87 +96,145 @@ def move_cursor():
         print(f"执行光标移动：{direction}")
     return jsonify({"status": "success"})
 
-# 网页前端模板（修复中文引号传参问题）
+# ===== 新增：PC端删除接口 =====
+@app.route('/delete_pc', methods=['POST'])
+def delete_pc():
+    global LAST_OPERATION
+    # 执行 PC 端删除（backspace）
+    pyautogui.press('backspace')
+    # 记录删除操作，且标记为不可撤销（避免和撤销逻辑冲突）
+    LAST_OPERATION = {"type": "delete", "content": ""}
+    print("执行PC端删除操作")
+    return jsonify({"status": "success"})
+
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>手机-电脑输入同步（支持符号包裹）</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>手机-电脑输入同步（支持模式切换）</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding-top: 50px;
+            padding: 20px 0;
             background-color: #f0f0f0;
+            margin: 0;
+            font-size: 16px;
+            /* 模式切换变量 */
+            --base-font: 1rem;
+            --input-height: 150px;
+            --input-font: 1.1rem;
+            --input-padding: 15px;
+            --btn-padding: 12px 8px;
+            --btn-font: 1rem;
+            --btn-min-height: 60px;
+            --btn-min-width: 80px;
+            --btn-gap: 8px;
+            --btn-margin-top: 15px;
+            --border-radius: 8px;
+        }
+        /* 手机模式样式（超大尺寸） */
+        body.phone-mode {
+            --base-font: 22px;
+            --input-height: 400px;
+            --input-font: 2rem;
+            --input-padding: 25px;
+            --btn-padding: 28px 15px;
+            --btn-font: 2rem;
+            --btn-min-height: 180px;
+            --btn-min-width: 90px;
+            --btn-gap: 12px;
+            --btn-margin-top: 25px;
+            --border-radius: 12px;
+        }
+        /* 平板模式样式（适中尺寸） */
+        body.tablet-mode {
+            --base-font: 18px;
+            --input-height: 180px;
+            --input-font: 1.2rem;
+            --input-padding: 20px;
+            --btn-padding: 18px 10px;
+            --btn-font: 1.2rem;
+            --btn-min-height: 70px;
+            --btn-min-width: 85px;
+            --btn-gap: 10px;
+            --btn-margin-top: 20px;
+            --border-radius: 10px;
+        }
+        #mode-switch-btn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 15px;
+            background-color: #ff9800;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 999;
         }
         #input-box {
             width: 90%;
-            height: 150px;
-            padding: 15px;
-            font-size: 18px;
+            height: var(--input-height);
+            padding: var(--input-padding);
             border: 2px solid #4CAF50;
-            border-radius: 8px;
+            border-radius: var(--border-radius);
             resize: none;
+            font-size: var(--input-font);
         }
         .btn-group {
             width: 90%;
-            margin-top: 20px;
+            margin-top: var(--btn-margin-top);
             display: flex;
-            gap: 10px;
+            gap: var(--btn-gap);
+            flex-wrap: wrap;
+        }
+        .func-btn, .dir-btn, .symbol-btn {
+            flex: 1;
+            padding: var(--btn-padding);
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            color: white;
+            white-space: nowrap;
+            min-width: var(--btn-min-width);
+            min-height: var(--btn-min-height);
+            font-size: var(--btn-font);
         }
         .func-btn {
-            flex: 1;
-            padding: 15px;
-            font-size: 20px;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        #send-text-btn {
             background-color: #4CAF50;
         }
         #send-enter-btn {
             background-color: #2196F3;
         }
         #undo-btn {
-            background-color: #9E9E9E; /* 默认灰色 */
+            background-color: #9E9E9E;
         }
         #undo-btn.enabled {
-            background-color: #4CAF50; /* 可点击时绿色 */
+            background-color: #4CAF50;
         }
         #clear-btn {
-            background-color: #f44336; /* 红色区分清空功能 */
+            background-color: #f44336;
         }
-        /* 方向按钮样式 */
         .dir-btn {
-            flex: 1;
-            padding: 15px;
-            font-size: 20px;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            background-color: #607d8b; /* 灰色区分方向功能 */
+            background-color: #333;
+            font-weight: bold;
         }
-        /* 成对符号按钮样式 */
         .symbol-btn {
-            flex: 1;
-            padding: 15px;
-            font-size: 20px;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            background-color: #9c27b0; /* 紫色区分符号功能 */
+            background-color: #9c27b0;
         }
         .func-btn:active, .dir-btn:active, .symbol-btn:active {
             opacity: 0.8;
+            transform: scale(0.98);
         }
-        /* 弹出输入框遮罩 */
+        /* 弹出层样式 */
         #symbol-modal {
             position: fixed;
             top: 0;
@@ -185,68 +247,87 @@ HTML_TEMPLATE = '''
             align-items: center;
             z-index: 1000;
         }
-        /* 弹出输入框容器 */
         .modal-content {
-            width: 80%;
+            width: 85%;
             background-color: white;
-            padding: 20px;
-            border-radius: 10px;
+            padding: var(--input-padding);
+            border-radius: var(--border-radius);
+            gap: 20px;
             display: flex;
             flex-direction: column;
-            gap: 15px;
         }
         #symbol-input {
-            padding: 15px;
-            font-size: 18px;
+            padding: var(--input-padding);
+            font-size: var(--input-font);
             border: 2px solid #4CAF50;
-            border-radius: 8px;
+            border-radius: var(--border-radius);
         }
         #confirm-symbol {
-            padding: 15px;
-            font-size: 18px;
+            padding: var(--btn-padding);
+            font-size: var(--btn-font);
             background-color: #4CAF50;
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: var(--border-radius);
             cursor: pointer;
         }
     </style>
 </head>
-<body>
-    <textarea id="input-box" placeholder="请输入内容（支持正则替换，规则在 hot-rule.txt 中配置）..."></textarea>
-    <!-- 原有功能按钮组 -->
+<body class="phone-mode">
+    <!-- 模式切换按钮 -->
+    <button id="mode-switch-btn" onclick="toggleMode()">切换为平板模式</button>
+
+    <textarea id="input-box" placeholder="请输入内容，随后按回车键发送。输入框为空时，回车为PC换行，删除为PC删除。（支持正则替换，规则在 hot-rule.txt 中配置）..."></textarea>
+    <!-- 功能按钮组 -->
     <div class="btn-group">
         <button class="func-btn" id="send-text-btn" onclick="sendText()">发送文本</button>
         <button class="func-btn" id="send-enter-btn" onclick="sendEnter()">发送回车</button>
         <button class="func-btn" id="undo-btn" onclick="undoLast()" disabled>撤销</button>
         <button class="func-btn" id="clear-btn" onclick="clearInput()">清空文本</button>
     </div>
-    <!-- 方向按钮组 -->
+    <!-- 方向按钮组：箭头图标 -->
     <div class="btn-group">
-        <button class="dir-btn" onclick="moveCursor('left')">左</button>
-        <button class="dir-btn" onclick="moveCursor('up')">上</button>
-        <button class="dir-btn" onclick="moveCursor('down')">下</button>
-        <button class="dir-btn" onclick="moveCursor('right')">右</button>
+        <button class="dir-btn" onclick="moveCursor('left')">←</button>
+        <button class="dir-btn" onclick="moveCursor('up')">↑</button>
+        <button class="dir-btn" onclick="moveCursor('down')">↓</button>
+        <button class="dir-btn" onclick="moveCursor('right')">→</button>
     </div>
-    <!-- 新增成对符号按钮组：修复中文引号传参 -->
+    <!-- 成对符号按钮组 -->
     <div class="btn-group">
         <button class="symbol-btn" onclick="openSymbolModal('()')">（）</button>
         <button class="symbol-btn" onclick="openSymbolModal('“”')">“”</button>
         <button class="symbol-btn" onclick="openSymbolModal('「」')">「」</button>
         <button class="symbol-btn" onclick="openSymbolModal('[]')">[]</button>
     </div>
-
     <!-- 弹出输入框遮罩 -->
     <div id="symbol-modal">
         <div class="modal-content">
-            <input type="text" id="symbol-input" placeholder="请输入要包裹的内容..." />
+            <input type="text" id="symbol-input" placeholder="请输入对话或提示内容，按回车键跳出对话框..." />
             <button id="confirm-symbol" onclick="confirmSymbol()">确认</button>
         </div>
     </div>
 
     <script>
-        let hasHistory = false; // 标记是否有可撤销的历史操作
-        let currentSymbol = ""; // 存储当前选中的成对符号
+        let hasHistory = false;
+        let currentSymbol = "";
+        let currentMode = "phone-mode"; // 默认手机模式
+
+        // 模式切换核心函数
+        function toggleMode() {
+            const body = document.body;
+            const btn = document.getElementById('mode-switch-btn');
+            if (currentMode === "phone-mode") {
+                body.classList.remove("phone-mode");
+                body.classList.add("tablet-mode");
+                currentMode = "tablet-mode";
+                btn.textContent = "切换为手机模式";
+            } else {
+                body.classList.remove("tablet-mode");
+                body.classList.add("phone-mode");
+                currentMode = "phone-mode";
+                btn.textContent = "切换为平板模式";
+            }
+        }
 
         function updateUndoBtn() {
             const btn = document.getElementById('undo-btn');
@@ -264,106 +345,89 @@ HTML_TEMPLATE = '''
             if (!text) return;
             fetch('/send', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({text: text})
             }).then(() => {
-                hasHistory = true; // 文本操作标记为可撤销
+                hasHistory = true;
                 updateUndoBtn();
                 document.getElementById('input-box').value = '';
             });
         }
 
         function sendEnter() {
-            fetch('/send_enter', {
-                method: 'POST'
-            }).then(() => {
-                hasHistory = true; // 回车操作也标记为可撤销
+            fetch('/send_enter', {method: 'POST'}).then(() => {
+                hasHistory = true;
                 updateUndoBtn();
             });
         }
 
         function undoLast() {
-            fetch('/undo', {
-                method: 'POST'
-            }).then(response => response.json())
-            .then(data => {
+            fetch('/undo', {method: 'POST'}).then(response => response.json()).then(data => {
                 if (data.status === 'success') {
-                    // 恢复文本内容（仅文本操作有内容，回车操作返回空）
                     document.getElementById('input-box').value = data.content || '';
-                    hasHistory = false; // 撤销后清空历史
+                    hasHistory = false;
                     updateUndoBtn();
                 }
             });
         }
 
         function clearInput() {
-            // 仅清空手机端文本框，不调用任何后端接口，不影响PC端
             document.getElementById('input-box').value = '';
         }
 
         function moveCursor(direction) {
             fetch('/move_cursor', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({direction: direction})
             }).then(() => {
-                // 移动光标后禁用撤销按钮
                 hasHistory = false;
                 updateUndoBtn();
             });
         }
 
-        // ===== 新增：打开符号输入弹窗 =====
+        // 新增：调用PC端删除接口
+        function sendDelete() {
+            fetch('/delete_pc', {method: 'POST'}).then(() => {
+                hasHistory = false; // 触发删除后重置历史，撤回按钮变灰
+                updateUndoBtn();
+            });
+        }
+
         function openSymbolModal(symbol) {
             currentSymbol = symbol;
             const modal = document.getElementById('symbol-modal');
             const input = document.getElementById('symbol-input');
-            // 清空输入框并显示弹窗
             input.value = '';
             modal.style.display = 'flex';
-            // 聚焦输入框，弹出输入法
             setTimeout(() => input.focus(), 100);
         }
 
-        // ===== 新增：在光标位置插入包裹后的内容 =====
         function insertAtCursor(text) {
             const input = document.getElementById('input-box');
             const startPos = input.selectionStart;
             const endPos = input.selectionEnd;
             const value = input.value;
-            // 插入内容到光标位置
             input.value = value.substring(0, startPos) + text + value.substring(endPos);
-            // 恢复光标位置到插入内容的末尾
             input.selectionStart = input.selectionEnd = startPos + text.length;
-            // 聚焦主输入框
             input.focus();
         }
 
-        // ===== 新增：确认符号包裹并插入 =====
         function confirmSymbol() {
             const input = document.getElementById('symbol-input');
             const content = input.value.trim();
             if (!content) {
-                // 无内容时直接关闭弹窗
                 document.getElementById('symbol-modal').style.display = 'none';
                 return;
             }
-            // 拆分成对符号（前半部分和后半部分）
             const leftSymbol = currentSymbol.substring(0, currentSymbol.length / 2);
             const rightSymbol = currentSymbol.substring(currentSymbol.length / 2);
-            // 包裹内容
             const wrappedText = leftSymbol + content + rightSymbol;
-            // 插入到主输入框光标位置
             insertAtCursor(wrappedText);
-            // 关闭弹窗
             document.getElementById('symbol-modal').style.display = 'none';
         }
 
-        // ===== 新增：输入框回车触发确认 =====
+        // 回车确认
         document.getElementById('symbol-input').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -373,20 +437,23 @@ HTML_TEMPLATE = '''
 
         // 点击遮罩关闭弹窗
         document.getElementById('symbol-modal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                this.style.display = 'none';
-            }
+            if (e.target === this) this.style.display = 'none';
         });
 
-        // 回车事件监听逻辑：区分文本有无执行对应操作
+        // 输入框回车触发发送
         document.getElementById('input-box').addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 const text = this.value.trim();
-                if (text) {
-                    sendText();
-                } else {
-                    sendEnter();
+                text ? sendText() : sendEnter();
+            }
+            // 监听删除键（Backspace）
+            if (e.key === 'Backspace') {
+                const text = this.value.trim();
+                // 输入框为空时，触发PC端删除
+                if (!text) {
+                    e.preventDefault(); // 阻止手机端输入框的默认删除行为（无内容可删）
+                    sendDelete(); // 调用删除接口
                 }
             }
         });
