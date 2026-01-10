@@ -29,6 +29,8 @@
 pip install -r requirement.txt
 ```
 
+<img width="750" height="578" alt="image" src="https://github.com/user-attachments/assets/c257076a-344f-4900-93bc-6495198221e4" />
+<img width="781" height="702" alt="image" src="https://github.com/user-attachments/assets/5ba8c4c1-20c2-4054-8363-d652cfffa756" />
 # 快速使用步骤
 下载代码将本仓库的 main.py 和 hot-rule.txt 保存到电脑同一目录下
 启动服务
@@ -81,3 +83,4 @@ pyautogui	模拟电脑键盘粘贴操作，实现文本上屏
 pyperclip	剪贴板管理，避免覆盖用户原有剪贴板内容
 socket	获取电脑局域网 IP，方便手机访问
 re	实现正则替换规则引擎
+
