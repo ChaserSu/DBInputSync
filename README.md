@@ -23,14 +23,16 @@
 - 手机：安卓/iOS（安装豆包输入法和浏览器）
 - 手机与电脑**连接同一Wi-Fi/局域网**
 
+<img width="750" height="578" alt="image" src="https://github.com/user-attachments/assets/c257076a-344f-4900-93bc-6495198221e4" />
+<img width="781" height="702" alt="image" src="https://github.com/user-attachments/assets/5ba8c4c1-20c2-4054-8363-d652cfffa756" />
+
 ### 软件依赖
 ```bash
 # Python 3.7+
 pip install -r requirement.txt
 ```
 
-<img width="750" height="578" alt="image" src="https://github.com/user-attachments/assets/c257076a-344f-4900-93bc-6495198221e4" />
-<img width="781" height="702" alt="image" src="https://github.com/user-attachments/assets/5ba8c4c1-20c2-4054-8363-d652cfffa756" />
+
 # 快速使用步骤
 下载代码将本仓库的 main.py 和 hot-rule.txt 保存到电脑同一目录下
 启动服务
