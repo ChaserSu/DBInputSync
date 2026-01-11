@@ -87,6 +87,12 @@ socket	获取电脑局域网 IP，方便手机访问
 re	实现正则替换规则引擎
 
 # 更新日志
+v0.0.4 添加了更多功能
+- 服务启动后可以直接扫码
+- 新增弹出键盘功能
+- 删除手机和平板模式，改为布局选项
+<img width="678" height="808" alt="image" src="https://github.com/user-attachments/assets/18eb83f1-23b6-41ff-b2b9-95b11dd4e996" />
+
 v0.0.3 添加了更多功能
 - 对平板和手机设备做出区分，也可以手动调节。
 - 修复bug和引导提示
