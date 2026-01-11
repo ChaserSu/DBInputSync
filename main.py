@@ -572,7 +572,7 @@ if __name__ == '__main__':
     local_ip = get_local_ip()
     port = 5000
     access_url = f"http://{local_ip}:{port}"
-    
+    print(f"\n项目地址：https://github.com/ChaserSu/DBInputSync")
     print(f"\n服务器已启动！")
     print(f"手机访问地址：{access_url}")
     print(f"已加载 {len(REPLACE_RULES)} 条替换规则")
