@@ -5,6 +5,9 @@ import socket
 import re
 import os
 import sys
+# 新增：导入二维码生成库
+import qrcode
+from qrcode.console_scripts import main as qr_main
 
 app = Flask(__name__)
 
@@ -138,16 +141,18 @@ HTML_TEMPLATE = '''
             --btn-gap: 8px;
             --btn-margin-top: 15px;
             --border-radius: 8px;
+            /* 新增：底部按钮间距 */
+            padding-bottom: 30px;
         }
         /* 手机模式样式（超大尺寸） */
         body.phone-mode {
-            --base-font: 22px;
-            --input-height: 400px;
+            --base-font: 18px;
+            --input-height: 280px;
             --input-font: 2rem;
             --input-padding: 25px;
             --btn-padding: 28px 15px;
             --btn-font: 2rem;
-            --btn-min-height: 180px;
+            --btn-min-height: 80px;
             --btn-min-width: 90px;
             --btn-gap: 12px;
             --btn-margin-top: 25px;
@@ -271,19 +276,36 @@ HTML_TEMPLATE = '''
             border-radius: var(--border-radius);
             cursor: pointer;
         }
+        /* 新增：底部唤起键盘按钮样式 */
+        #show-keyboard-btn {
+            margin-top: 20px;
+            padding: var(--btn-padding);
+            font-size: var(--btn-font);
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            min-width: var(--btn-min-width);
+            min-height: var(--btn-min-height);
+            cursor: pointer;
+        }
+        #show-keyboard-btn:active {
+            opacity: 0.8;
+            transform: scale(0.98);
+        }
     </style>
 </head>
 <body class="phone-mode">
     <!-- 模式切换按钮 -->
-    <button id="mode-switch-btn" onclick="toggleMode()">切换为平板模式</button>
+    <button id="mode-switch-btn" onclick="toggleMode()">布局：大</button>
 
     <textarea id="input-box" placeholder="请输入内容，随后按回车键发送。输入框为空时，回车为PC换行，删除为PC删除。（支持正则替换，规则在 hot-rule.txt 中配置）..."></textarea>
     <!-- 功能按钮组 -->
     <div class="btn-group">
-        <button class="func-btn" id="send-text-btn" onclick="sendText()">发送文本</button>
-        <button class="func-btn" id="send-enter-btn" onclick="sendEnter()">发送回车</button>
+        <button class="func-btn" id="send-text-btn" onclick="sendText()">发送</button>
+        <button class="func-btn" id="send-enter-btn" onclick="sendEnter()">回车</button>
         <button class="func-btn" id="undo-btn" onclick="undoLast()" disabled>撤销</button>
-        <button class="func-btn" id="clear-btn" onclick="clearInput()">清空文本</button>
+        <button class="func-btn" id="clear-btn" onclick="clearInput()">清空</button>
     </div>
     <!-- 方向按钮组：箭头图标 -->
     <div class="btn-group">
@@ -299,6 +321,9 @@ HTML_TEMPLATE = '''
         <button class="symbol-btn" onclick="openSymbolModal('「」')">「」</button>
         <button class="symbol-btn" onclick="openSymbolModal('[]')">[]</button>
     </div>
+    <!-- 新增：底部唤起键盘按钮 -->
+    <button id="show-keyboard-btn" onclick="focusInputAndShowKeyboard()">唤起键盘</button>
+
     <!-- 弹出输入框遮罩 -->
     <div id="symbol-modal">
         <div class="modal-content">
@@ -320,12 +345,12 @@ HTML_TEMPLATE = '''
                 body.classList.remove("phone-mode");
                 body.classList.add("tablet-mode");
                 currentMode = "tablet-mode";
-                btn.textContent = "切换为手机模式";
+                btn.textContent = "布局：小";
             } else {
                 body.classList.remove("tablet-mode");
                 body.classList.add("phone-mode");
                 currentMode = "phone-mode";
-                btn.textContent = "切换为平板模式";
+                btn.textContent = "布局：大";
             }
         }
 
@@ -427,6 +452,15 @@ HTML_TEMPLATE = '''
             document.getElementById('symbol-modal').style.display = 'none';
         }
 
+        // 新增：唤起键盘并聚焦输入框函数
+        function focusInputAndShowKeyboard() {
+            const inputBox = document.getElementById('input-box');
+            // 聚焦输入框，移动端会自动弹出键盘
+            inputBox.focus();
+            // 滚动到输入框位置（可选，防止按钮遮挡）
+            inputBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
         // 回车确认
         document.getElementById('symbol-input').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
@@ -516,12 +550,37 @@ def get_local_ip():
         s.close()
     return local_ip
 
+# 新增：生成终端二维码函数
+def generate_cli_qrcode(url):
+    """在命令行输出字符画二维码"""
+    try:
+        # 调用 qrcode 库的终端生成逻辑
+        qr_main(['--factory', 'qrcode.terminal.SixteenColor', url])
+    except Exception as e:
+        # 降级方案：使用简单字符二维码
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=1,
+            border=1,
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+        qr.print_ascii(invert=True)
+
 if __name__ == '__main__':
     local_ip = get_local_ip()
     port = 5000
+    access_url = f"http://{local_ip}:{port}"
+    
     print(f"\n服务器已启动！")
-    print(f"手机访问地址：http://{local_ip}:{port}")
+    print(f"手机访问地址：{access_url}")
     print(f"已加载 {len(REPLACE_RULES)} 条替换规则")
     print(f"注意：手机和电脑需在同一局域网下\n")
+    
+    # 新增：生成并输出终端二维码
+    print("扫码访问（手机摄像头扫描下方二维码）：")
+    generate_cli_qrcode(access_url)
+    print()
     
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
